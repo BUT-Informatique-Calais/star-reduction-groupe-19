@@ -1,4 +1,4 @@
-#!/home/thomas/Documents/GitHub/star-reduction-groupe-19/venv/bin/python3
+#!/home/timeo-doffagne/Documents/GitHub/star-reduction-groupe-19/venv/bin/python3
 import sys
 from astropy.visualization.scripts.fits2bitmap import main
 if __name__ == '__main__':
