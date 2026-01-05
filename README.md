@@ -2,7 +2,7 @@
 
 # Project Documentation
 
-## Installation
+## Installations
 
 
 ### Virtual Environment
