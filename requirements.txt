@@ -2,5 +2,6 @@ numpy==1.26.4
 matplotlib==3.8.4
 astropy==6.0.1
 opencv-python-headless==4.9.0.80
+PyQt5==5.15.10
 photutils==1.12.0
 
