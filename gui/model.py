@@ -20,7 +20,7 @@ class Model:
         hdul.close()
         return data
 
-    def process_image(self, data, kernel_size, threshold):
+    def process_image(self, data, kernel_size, threshold, blur_sigma, mask_dilate_size, attenuation_factor):
         # Handle both monochrome and color images
         if data.ndim == 3:
             if data.shape[0] == 3:

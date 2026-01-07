@@ -25,9 +25,9 @@ class Controller:
 
     def update_kernel(self, value):
         if value % 2 == 0:
-            value += 1  # Ensure odd
+            value += 1
         self.model.kernel_size = value
-        self.view.update_labels(self.model.kernel_size, self.model.threshold)
+        self.view.update_labels(self.model.kernel_size, self.model.threshold, self.model.blur_sigma, self.model.mask_dilate_size, self.model.attenuation_factor)
         if self.data is not None:
             self.process_and_display()
 
