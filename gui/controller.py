@@ -57,7 +57,7 @@ class Controller:
 
     def process_and_display(self):
         try:
-            processed = self.model.process_image(self.data, self.model.kernel_size, self.model.threshold)
+            processed = self.model.process_image(self.data, self.model.kernel_size, self.model.threshold, self.model.blur_sigma, self.model.mask_dilate_size, self.model.attenuation_factor)
             self.view.update_image(processed)
         except Exception as e:
             QMessageBox.critical(self.view, "Erreur", f"Erreur lors du traitement de l'image : {str(e)}")
