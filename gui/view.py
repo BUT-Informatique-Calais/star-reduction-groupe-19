@@ -15,7 +15,7 @@ class View(QWidget):
         self.setWindowTitle('Selective Erosion GUI')
         self.setGeometry(200, 150, 1000, 700)
 
-        # style
+        #  STYLE GLOBAL 
         self.setStyleSheet("""
             QWidget {
                 background-color: #1e1e1e;
@@ -53,12 +53,17 @@ class View(QWidget):
 
         main_layout = QVBoxLayout()
 
-        #  BUTTON 
+        #  BOUTON CHARGER FITS 
         self.load_button = QPushButton(' Charger un fichier FITS')
         self.load_button.setFixedHeight(40)
         main_layout.addWidget(self.load_button)
 
-        #  SLIDERS GROUP 
+        #  BOUTON TOGGLE AVANT/APRÈS 
+        self.toggle_button = QPushButton("Afficher image originale")
+        self.toggle_button.setFixedHeight(40)
+        main_layout.addWidget(self.toggle_button)
+
+        #  GROUPE DES SLIDERS 
         sliders_group = QGroupBox("Paramètres du traitement")
         sliders_layout = QGridLayout()
 
@@ -111,7 +116,7 @@ class View(QWidget):
         sliders_group.setLayout(sliders_layout)
         main_layout.addWidget(sliders_group)
 
-        #  IMAGE DISPLAY 
+        #  AFFICHAGE DE L’IMAGE 
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setStyleSheet("background-color: #111; border: 1px solid #333;")
@@ -120,8 +125,10 @@ class View(QWidget):
 
         self.setLayout(main_layout)
 
+    #  MISE À JOUR DE L’IMAGE 
     def update_image(self, image):
         image = np.ascontiguousarray(image)
+
         if image.ndim == 3:
             h, w, c = image.shape
             q_img = QImage(image.data, w, h, 3 * w, QImage.Format_RGB888)
@@ -130,12 +137,11 @@ class View(QWidget):
             q_img = QImage(image.data, w, h, w, QImage.Format_Grayscale8)
 
         pixmap = QPixmap.fromImage(q_img)
-        self.image_label.setPixmap(pixmap.scaled(
-            self.image_label.size(),
-            Qt.KeepAspectRatio,
-            Qt.SmoothTransformation
-        ))
+        self.image_label.setPixmap(
+            pixmap.scaled(self.image_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        )
 
+    #  MISE À JOUR DES LABELS DES SLIDERS 
     def update_labels(self, kernel_size, threshold, blur_sigma, mask_dilate_size, attenuation_factor):
         self.kernel_label.setText(f'Taille du noyau : {kernel_size}')
         self.threshold_label.setText(f'Seuil du masque : {threshold:.1f}')

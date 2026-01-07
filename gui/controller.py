@@ -5,6 +5,10 @@ class Controller:
         self.model = model
         self.view = view
         self.data = None
+        self.original_image = None
+        self.processed_image = None
+        self.showing_original = False
+
 
         self.view.load_button.clicked.connect(self.load_fits)
         self.view.kernel_slider.valueChanged.connect(self.update_kernel)
@@ -12,6 +16,8 @@ class Controller:
         self.view.blur_sigma_slider.valueChanged.connect(self.update_blur_sigma)
         self.view.mask_dilate_slider.valueChanged.connect(self.update_mask_dilate)
         self.view.attenuation_slider.valueChanged.connect(self.update_attenuation)
+        self.view.toggle_button.clicked.connect(self.toggle_image)
+
 
     def load_fits(self):
         options = QFileDialog.Options()
@@ -57,7 +63,43 @@ class Controller:
 
     def process_and_display(self):
         try:
-            processed = self.model.process_image(self.data, self.model.kernel_size, self.model.threshold, self.model.blur_sigma, self.model.mask_dilate_size, self.model.attenuation_factor)
-            self.view.update_image(processed)
+            # Stocker l'image originale normalisée pour l'affichage
+            if self.data.ndim == 3:
+                img = np.mean(self.data, axis=2)
+            else:
+                img = self.data
+
+            self.original_image = ((img - img.min()) / (img.max() - img.min()) * 255).astype('uint8')
+
+            # Image traitée
+            self.processed_image = self.model.process_image(
+                self.data,
+                self.model.kernel_size,
+                self.model.threshold,
+                self.model.blur_sigma,
+                self.model.mask_dilate_size,
+                self.model.attenuation_factor
+            )
+
+            # Afficher l'image traitée par défaut
+            self.showing_original = False
+            self.view.update_image(self.processed_image)
+            self.view.toggle_button.setText("Afficher image originale")
+
         except Exception as e:
             QMessageBox.critical(self.view, "Erreur", f"Erreur lors du traitement de l'image : {str(e)}")
+
+    def toggle_image(self):
+        if self.original_image is None or self.processed_image is None:
+            return
+
+        if self.showing_original:
+            # Afficher l'image traitée
+            self.view.update_image(self.processed_image)
+            self.view.toggle_button.setText("Afficher image originale")
+            self.showing_original = False
+        else:
+            # Afficher l'image originale
+            self.view.update_image(self.original_image)
+            self.view.toggle_button.setText("Afficher image traitée")
+            self.showing_original = True
