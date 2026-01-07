@@ -4,3 +4,4 @@ numpy
 opencv-python-headless
 photutils
 scipy
+PyQt5
