@@ -67,6 +67,20 @@ class View(QWidget):
         self.toggle_button = QPushButton("Afficher image originale")
         self.toggle_button.setFixedHeight(40)
         buttons_layout.addWidget(self.toggle_button)
+        
+        self.mode_button = QPushButton("Mode: Multitaille")
+        self.mode_button.setFixedHeight(40)
+        self.mode_button.setStyleSheet("""
+            QPushButton {
+                background-color: #2a5a2a;
+                padding: 10px;
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #3a7a3a;
+            }
+        """)
+        buttons_layout.addWidget(self.mode_button)
 
         self.save_button = QPushButton('Télécharger l\'image')
         self.save_button.setFixedHeight(40)
@@ -126,6 +140,7 @@ class View(QWidget):
         sliders_layout.addWidget(self.attenuation_slider, 4, 1)
 
         sliders_group.setLayout(sliders_layout)
+        main_layout.addWidget(sliders_group)
 
         #  AFFICHAGE DE L'IMAGE 
         self.image_label = QLabel()

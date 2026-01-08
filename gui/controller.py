@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 import cv2 as cv
 import numpy as np
+
 class Controller:
     def __init__(self, model, view):
         self.model = model
@@ -10,7 +11,6 @@ class Controller:
         self.processed_image = None
         self.showing_original = False
 
-
         self.view.load_button.clicked.connect(self.load_fits)
         self.view.kernel_slider.valueChanged.connect(self.update_kernel)
         self.view.threshold_slider.valueChanged.connect(self.update_threshold)
@@ -19,7 +19,7 @@ class Controller:
         self.view.attenuation_slider.valueChanged.connect(self.update_attenuation)
         self.view.toggle_button.clicked.connect(self.toggle_image)
         self.view.save_button.clicked.connect(self.save_image)
-
+        self.view.mode_button.clicked.connect(self.toggle_mode)
 
     def load_fits(self):
         options = QFileDialog.Options()
@@ -30,6 +30,45 @@ class Controller:
                 self.process_and_display()
             except Exception as e:
                 QMessageBox.critical(self.view, "Erreur", f"Erreur lors du chargement du fichier FITS : {str(e)}")
+
+    def save_image(self):
+        if self.processed_image is None:
+            QMessageBox.warning(self.view, "Attention", "Aucune image à sauvegarder.")
+            return
+        
+        options = QFileDialog.Options()
+        file_path, selected_filter = QFileDialog.getSaveFileName(
+            self.view, 
+            "Enregistrer l'image", 
+            "image_traitee.png", 
+            "PNG Files (*.png);;JPEG Files (*.jpg);;TIFF Files (*.tiff)", 
+            options=options
+        )
+        
+        if file_path:
+            try:
+                # Ajouter l'extension si elle est manquante
+                import os
+                if not any(file_path.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.tiff', '.tif']):
+                    if 'PNG' in selected_filter:
+                        file_path += '.png'
+                    elif 'JPEG' in selected_filter:
+                        file_path += '.jpg'
+                    elif 'TIFF' in selected_filter:
+                        file_path += '.tiff'
+                    else:
+                        file_path += '.png'  # Par défaut
+                
+                # OpenCV uses BGR format, so convert if it's a color image
+                if self.processed_image.ndim == 3:
+                    image_to_save = cv.cvtColor(self.processed_image, cv.COLOR_RGB2BGR)
+                else:
+                    image_to_save = self.processed_image
+                
+                cv.imwrite(file_path, image_to_save)
+                QMessageBox.information(self.view, "Succès", f"Image sauvegardée avec succès :\n{file_path}")
+            except Exception as e:
+                QMessageBox.critical(self.view, "Erreur", f"Erreur lors de la sauvegarde de l'image : {str(e)}")
 
     def update_kernel(self, value):
         if value % 2 == 0:
@@ -65,13 +104,9 @@ class Controller:
 
     def process_and_display(self):
         try:
-            # Gérer les images couleur et monochrome
+            # Stocker l'image originale normalisée pour l'affichage
             if self.data.ndim == 3:
-                if self.data.shape[0] == 3:
-                    data = np.transpose(self.data, (1, 2, 0))
-                else:
-                    data = self.data
-                img = np.mean(data, axis=2)
+                img = np.mean(self.data, axis=2)
             else:
                 img = self.data
 
@@ -113,41 +148,35 @@ class Controller:
             self.view.toggle_button.setText("Afficher image traitée")
             self.showing_original = True
 
-    def save_image(self):
-        if self.processed_image is None:
-            QMessageBox.warning(self.view, "Attention", "Aucune image à sauvegarder.")
-            return
+    def toggle_mode(self):
+        """Bascule entre le mode érosion classique et multitaille"""
+        self.model.multiscale_erosion = not self.model.multiscale_erosion
         
-        options = QFileDialog.Options()
-        file_path, selected_filter = QFileDialog.getSaveFileName(
-            self.view, 
-            "Enregistrer l'image", 
-            "image_traitee.png", 
-            "PNG Files (*.png);;JPEG Files (*.jpg);;TIFF Files (*.tiff)", 
-            options=options
-        )
+        if self.model.multiscale_erosion:
+            self.view.mode_button.setText("Mode: Multitaille")
+            self.view.mode_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #2a5a2a;
+                    padding: 10px;
+                    border-radius: 6px;
+                }
+                QPushButton:hover {
+                    background-color: #3a7a3a;
+                }
+            """)
+        else:
+            self.view.mode_button.setText("Mode: Classique")
+            self.view.mode_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #5a4a2a;
+                    padding: 10px;
+                    border-radius: 6px;
+                }
+                QPushButton:hover {
+                    background-color: #7a6a4a;
+                }
+            """)
         
-        if file_path:
-            try:
-                # Ajouter l'extension si elle est manquante
-                import os
-                if not any(file_path.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.tiff', '.tif']):
-                    if 'PNG' in selected_filter:
-                        file_path += '.png'
-                    elif 'JPEG' in selected_filter:
-                        file_path += '.jpg'
-                    elif 'TIFF' in selected_filter:
-                        file_path += '.tiff'
-                    else:
-                        file_path += '.png'  # Par défaut
-                
-                # OpenCV uses BGR format, so convert if it's a color image
-                if self.processed_image.ndim == 3:
-                    image_to_save = cv.cvtColor(self.processed_image, cv.COLOR_RGB2BGR)
-                else:
-                    image_to_save = self.processed_image
-                
-                cv.imwrite(file_path, image_to_save)
-                QMessageBox.information(self.view, "Succès", f"Image sauvegardée avec succès :\n{file_path}")
-            except Exception as e:
-                QMessageBox.critical(self.view, "Erreur", f"Erreur lors de la sauvegarde de l'image : {str(e)}")
+        # Retraiter l'image si elle existe
+        if self.data is not None:
+            self.process_and_display()

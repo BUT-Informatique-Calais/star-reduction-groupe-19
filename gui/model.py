@@ -3,6 +3,7 @@ from astropy.io import fits
 import cv2 as cv
 from photutils.detection import DAOStarFinder
 from astropy.stats import sigma_clipped_stats
+from scipy.ndimage import distance_transform_edt
 
 class Model:
     def __init__(self):
@@ -12,6 +13,7 @@ class Model:
         self.blur_sigma = 5
         self.mask_dilate_size = 5
         self.attenuation_factor = 0.4
+        self.multiscale_erosion = True  # Active l'érosion adaptative
 
     def load_fits(self, path):
         self.fits_path = path
@@ -39,7 +41,6 @@ class Model:
         daofind = DAOStarFinder(fwhm=5.0, threshold=median + threshold * std)
         sources = daofind(data_gray)
 
-        # Create mask
         mask = np.zeros_like(data_gray, dtype=np.uint8)
         if sources is not None:
             positions = np.transpose((sources['xcentroid'], sources['ycentroid']))
@@ -52,21 +53,27 @@ class Model:
         bright_mask = (data_gray > thresh_value).astype(np.uint8) * 255
         mask = cv.bitwise_or(mask, bright_mask)
 
-        kernel_dilate = np.ones((mask_dilate_size, mask_dilate_size), np.uint8)
-        mask = cv.dilate(mask, kernel_dilate, iterations=2)
-
-        # Erosion
-        kernel_erosion = np.ones((5, 5), np.uint8)
-        Ierode = cv.erode(image, kernel_erosion, iterations=2)
-
-        # Blurred mask
-        M = mask.astype(np.float32) / 255.0
-        M = cv.GaussianBlur(M, (kernel_size, kernel_size), blur_sigma)
-
-        if image.ndim == 3:
-            M = np.stack([M] * image.shape[2], axis=2)
-
-        Ifinal = (M * Ierode.astype(np.float32) + (1 - M) * image.astype(np.float32)).astype(np.uint8)
+        # === ÉROSION ADAPTATIVE PAR ÉTOILE ===
+        if self.multiscale_erosion and sources is not None:
+            Ifinal = self._adaptive_erosion_per_star(
+                image, data_gray, sources, mask, 
+                kernel_size, blur_sigma, mask_dilate_size
+            )
+        else:
+            # Érosion classique (ancienne méthode)
+            kernel_dilate = np.ones((mask_dilate_size, mask_dilate_size), np.uint8)
+            mask = cv.dilate(mask, kernel_dilate, iterations=2)
+            
+            kernel_erosion = np.ones((5, 5), np.uint8)
+            Ierode = cv.erode(image, kernel_erosion, iterations=2)
+            
+            M = mask.astype(np.float32) / 255.0
+            M = cv.GaussianBlur(M, (kernel_size, kernel_size), blur_sigma)
+            
+            if image.ndim == 3:
+                M = np.stack([M] * image.shape[2], axis=2)
+            
+            Ifinal = (M * Ierode.astype(np.float32) + (1 - M) * image.astype(np.float32)).astype(np.uint8)
 
         # Reintegrate bright stars
         final = Ifinal.copy()
@@ -83,3 +90,126 @@ class Model:
                     final[y1:y2, x1:x2] = np.maximum(final[y1:y2, x1:x2], attenuated_star.astype(np.uint8))
 
         return final
+
+    def _adaptive_erosion_per_star(self, image, data_gray, sources, mask, kernel_size, blur_sigma, mask_dilate_size):
+        """
+        Applique une érosion adaptative individuellement pour chaque étoile.
+        Le niveau d'érosion est proportionnel au flux et au FWHM de l'étoile.
+        """
+        h, w = data_gray.shape
+        
+        # Normaliser les flux pour déterminer les niveaux d'érosion
+        flux_values = sources['flux']
+        flux_min, flux_max = flux_values.min(), flux_values.max()
+        
+        # Créer une carte d'érosion (carte qui indique quel niveau d'érosion appliquer)
+        erosion_map = np.zeros((h, w), dtype=np.float32)
+        star_mask_global = np.zeros((h, w), dtype=np.uint8)
+        
+        # Pour chaque étoile, définir sa zone d'influence et son niveau d'érosion
+        for source in sources:
+            x, y = int(source['xcentroid']), int(source['ycentroid'])
+            if not (0 <= x < w and 0 <= y < h):
+                continue
+                
+            flux = source['flux']
+            fwhm = source.get('fwhm', 5.0)  # Utiliser FWHM si disponible
+            
+            # Calculer le niveau d'érosion basé sur le flux (normalisé entre 0 et 1)
+            if flux_max > flux_min:
+                flux_normalized = (flux - flux_min) / (flux_max - flux_min)
+            else:
+                flux_normalized = 0.5
+            
+            # Rayon d'influence proportionnel au FWHM et au flux
+            # Plus l'étoile est brillante, plus le rayon est grand
+            influence_radius = int(fwhm * 2.5 + flux_normalized * 15)
+            influence_radius = max(8, min(influence_radius, 40))  # Limiter entre 8 et 40 pixels
+            
+            # Niveau d'érosion : 0 = pas d'érosion, 1 = érosion maximale
+            # Les étoiles brillantes ont plus d'érosion (courbe exponentielle modérée)
+            erosion_level = flux_normalized ** 0.8  # Moins agressif pour éviter les trous noirs
+            
+            # Créer un masque circulaire pour cette étoile avec gradient
+            y_grid, x_grid = np.ogrid[-y:h-y, -x:w-x]
+            distance_from_star = np.sqrt(x_grid*x_grid + y_grid*y_grid)
+            
+            # Masque avec gradient radial (1 au centre, 0 au bord)
+            star_influence = np.maximum(0, 1 - distance_from_star / influence_radius)
+            
+            # Mettre à jour la carte d'érosion (prendre le max pour les zones qui se chevauchent)
+            erosion_map = np.maximum(erosion_map, star_influence * erosion_level)
+            
+            # Marquer la zone d'influence de l'étoile
+            star_mask_global = np.maximum(star_mask_global, (star_influence > 0.1).astype(np.uint8) * 255)
+        
+        # Appliquer plusieurs niveaux d'érosion avec préservation des détails
+        # Créer 5 images érodées avec différentes intensités (moins agressif)
+        erosion_levels = []
+        for i in range(5):
+            kernel_size_erosion = 3 + i * 2  # 3, 5, 7, 9, 11
+            iterations = 1 + i  # 1, 2, 3, 4, 5
+            kernel = np.ones((kernel_size_erosion, kernel_size_erosion), np.uint8)
+            eroded = cv.erode(image, kernel, iterations=iterations)
+            
+            # Limiter l'érosion pour éviter les trous noirs complets
+            # On garde au minimum 10% de la valeur originale
+            eroded = np.maximum(eroded, (image * 0.1).astype(np.uint8))
+            
+            erosion_levels.append(eroded.astype(np.float32))
+        
+        # Interpoler entre les niveaux d'érosion selon la carte d'érosion
+        # erosion_map va de 0 (pas d'érosion) à 1 (érosion maximale)
+        result = np.zeros_like(image, dtype=np.float32)
+        
+        # Diviser erosion_map en 4 segments pour interpoler entre les 5 niveaux
+        for i in range(4):
+            lower_bound = i / 4.0
+            upper_bound = (i + 1) / 4.0
+            
+            # Trouver les pixels dans cette plage
+            mask_segment = ((erosion_map >= lower_bound) & (erosion_map < upper_bound))
+            
+            if np.any(mask_segment):
+                # Interpolation linéaire entre niveau i et i+1
+                alpha = (erosion_map - lower_bound) / (upper_bound - lower_bound)
+                alpha = np.clip(alpha, 0, 1)
+                
+                if image.ndim == 3:
+                    alpha_3d = np.stack([alpha] * image.shape[2], axis=2)
+                    mask_segment_3d = np.stack([mask_segment] * image.shape[2], axis=2)
+                    interpolated = (1 - alpha_3d) * erosion_levels[i] + alpha_3d * erosion_levels[i+1]
+                    result = np.where(mask_segment_3d, interpolated, result)
+                else:
+                    interpolated = (1 - alpha) * erosion_levels[i] + alpha * erosion_levels[i+1]
+                    result = np.where(mask_segment, interpolated, result)
+        
+        # Gérer les valeurs maximales (erosion_map == 1) - moins agressif
+        mask_max = (erosion_map >= 0.75)
+        if np.any(mask_max):
+            if image.ndim == 3:
+                mask_max_3d = np.stack([mask_max] * image.shape[2], axis=2)
+                result = np.where(mask_max_3d, erosion_levels[4], result)
+            else:
+                result = np.where(mask_max, erosion_levels[4], result)
+        
+        # Flouter la carte d'érosion pour des transitions douces
+        erosion_map_smooth = cv.GaussianBlur(erosion_map, (kernel_size, kernel_size), blur_sigma)
+        
+        if image.ndim == 3:
+            erosion_map_smooth = np.stack([erosion_map_smooth] * image.shape[2], axis=2)
+        
+        # Mélanger avec l'image originale dans les zones sans étoiles
+        star_mask_smooth = cv.GaussianBlur(star_mask_global.astype(np.float32) / 255.0, 
+                                           (kernel_size, kernel_size), blur_sigma)
+        
+        if image.ndim == 3:
+            star_mask_smooth = np.stack([star_mask_smooth] * image.shape[2], axis=2)
+        
+        # Résultat final : mélange entre image érodée et originale
+        final_result = (
+            star_mask_smooth * result +
+            (1 - star_mask_smooth) * image.astype(np.float32)
+        ).astype(np.uint8)
+        
+        return final_result
