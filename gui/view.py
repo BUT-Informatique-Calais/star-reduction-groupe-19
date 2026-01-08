@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSlider,
-    QGroupBox, QGridLayout
+    QGroupBox, QGridLayout, QSplitter
 )
 from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtCore import Qt
@@ -126,14 +126,19 @@ class View(QWidget):
         sliders_layout.addWidget(self.attenuation_slider, 4, 1)
 
         sliders_group.setLayout(sliders_layout)
-        main_layout.addWidget(sliders_group)
 
         #  AFFICHAGE DE L'IMAGE 
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setStyleSheet("background-color: #111; border: 1px solid #333;")
-        self.image_label.setFixedHeight(400)
-        main_layout.addWidget(self.image_label)
+        self.image_label.setMinimumHeight(400)
+
+        # Utiliser un splitter pour ajuster les proportions en plein écran
+        self.splitter = QSplitter(Qt.Vertical)
+        self.splitter.addWidget(sliders_group)
+        self.splitter.addWidget(self.image_label)
+
+        main_layout.addWidget(self.splitter)
 
         self.setLayout(main_layout)
 
@@ -160,3 +165,11 @@ class View(QWidget):
         self.blur_sigma_label.setText(f'Sigma du flou : {blur_sigma}')
         self.mask_dilate_label.setText(f'Taille dilatation : {mask_dilate_size}')
         self.attenuation_label.setText(f'Atténuation : {attenuation_factor:.1f}')
+
+    def resizeEvent(self, event):
+        if self.isFullScreen():
+            total_height = self.height()
+            image_height = int(total_height * 0.75)
+            sliders_height = total_height - image_height
+            self.splitter.setSizes([sliders_height, image_height])
+        super().resizeEvent(event)
