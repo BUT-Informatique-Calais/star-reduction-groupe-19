@@ -2,9 +2,61 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSlider,
     QGroupBox, QGridLayout, QSplitter
 )
-from PyQt5.QtGui import QPixmap, QImage
+from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen
 from PyQt5.QtCore import Qt
 import numpy as np
+
+class ImageComparisonWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.original_pixmap = None
+        self.processed_pixmap = None
+        self.split_position = 0.5  # 0.0 to 1.0
+        self.setMinimumHeight(400)
+        self.setStyleSheet("background-color: #111; border: 1px solid #333;")
+
+    def set_images(self, original_image, processed_image):
+        self.original_pixmap = self.convert_to_pixmap(original_image)
+        self.processed_pixmap = self.convert_to_pixmap(processed_image)
+        self.update()
+
+    def convert_to_pixmap(self, image):
+        if image is None:
+            return None
+        image = np.ascontiguousarray(image)
+        if image.ndim == 3:
+            h, w, c = image.shape
+            q_img = QImage(image.data, w, h, 3 * w, QImage.Format_RGB888)
+        else:
+            h, w = image.shape
+            q_img = QImage(image.data, w, h, w, QImage.Format_Grayscale8)
+        return QPixmap.fromImage(q_img)
+
+    def set_split_position(self, position):
+        self.split_position = position / 100.0  # assuming slider 0-100
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        if self.processed_pixmap and self.original_pixmap:
+            rect = self.rect()
+            
+            # Scale both pixmaps to fill the widget
+            scaled_processed = self.processed_pixmap.scaled(rect.size(), Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+            scaled_original = self.original_pixmap.scaled(rect.size(), Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+            
+            # Calculate split position
+            split_x = int(self.split_position * rect.width())
+            
+            # Draw processed image on the left
+            painter.drawPixmap(0, 0, scaled_processed, 0, 0, split_x, rect.height())
+            
+            # Draw original image on the right
+            painter.drawPixmap(split_x, 0, scaled_original, split_x, 0, rect.width() - split_x, rect.height())
+            
+            # Draw split line
+            painter.setPen(QPen(Qt.white, 2))
+            painter.drawLine(split_x, 0, split_x, rect.height())
 
 class View(QWidget):
     def __init__(self):
@@ -64,10 +116,6 @@ class View(QWidget):
         self.load_button.setFixedHeight(40)
         buttons_layout.addWidget(self.load_button)
 
-        self.toggle_button = QPushButton("Afficher image originale")
-        self.toggle_button.setFixedHeight(40)
-        buttons_layout.addWidget(self.toggle_button)
-        
         self.mode_button = QPushButton("Mode: Multitaille")
         self.mode_button.setFixedHeight(40)
         self.mode_button.setStyleSheet("""
@@ -142,16 +190,21 @@ class View(QWidget):
         sliders_group.setLayout(sliders_layout)
         main_layout.addWidget(sliders_group)
 
+        #  CURSEUR POUR COMPARAISON AVANT/APRÈS 
+        self.comparison_slider = QSlider(Qt.Horizontal)
+        self.comparison_slider.setMinimum(0)
+        self.comparison_slider.setMaximum(100)
+        self.comparison_slider.setValue(50)
+        self.comparison_slider.setFixedHeight(30)
+        main_layout.addWidget(self.comparison_slider)
+
         #  AFFICHAGE DE L'IMAGE 
-        self.image_label = QLabel()
-        self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setStyleSheet("background-color: #111; border: 1px solid #333;")
-        self.image_label.setMinimumHeight(400)
+        self.image_widget = ImageComparisonWidget()
 
         # Utiliser un splitter pour ajuster les proportions en plein écran
         self.splitter = QSplitter(Qt.Vertical)
         self.splitter.addWidget(sliders_group)
-        self.splitter.addWidget(self.image_label)
+        self.splitter.addWidget(self.image_widget)
 
         main_layout.addWidget(self.splitter)
 
@@ -159,19 +212,12 @@ class View(QWidget):
 
     #  MISE À JOUR DE L'IMAGE 
     def update_image(self, image):
-        image = np.ascontiguousarray(image)
+        # This method is now for setting the processed image
+        # The widget will handle displaying both
+        pass
 
-        if image.ndim == 3:
-            h, w, c = image.shape
-            q_img = QImage(image.data, w, h, 3 * w, QImage.Format_RGB888)
-        else:
-            h, w = image.shape
-            q_img = QImage(image.data, w, h, w, QImage.Format_Grayscale8)
-
-        pixmap = QPixmap.fromImage(q_img)
-        self.image_label.setPixmap(
-            pixmap.scaled(self.image_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        )
+    def set_comparison_images(self, original_image, processed_image):
+        self.image_widget.set_images(original_image, processed_image)
 
     #  MISE À JOUR DES LABELS DES SLIDERS 
     def update_labels(self, kernel_size, threshold, blur_sigma, mask_dilate_size, attenuation_factor):

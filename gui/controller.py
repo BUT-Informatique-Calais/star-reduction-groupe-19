@@ -9,7 +9,6 @@ class Controller:
         self.data = None
         self.original_image = None
         self.processed_image = None
-        self.showing_original = False
 
         self.view.load_button.clicked.connect(self.load_fits)
         self.view.kernel_slider.valueChanged.connect(self.update_kernel)
@@ -17,7 +16,7 @@ class Controller:
         self.view.blur_sigma_slider.valueChanged.connect(self.update_blur_sigma)
         self.view.mask_dilate_slider.valueChanged.connect(self.update_mask_dilate)
         self.view.attenuation_slider.valueChanged.connect(self.update_attenuation)
-        self.view.toggle_button.clicked.connect(self.toggle_image)
+        self.view.comparison_slider.valueChanged.connect(self.update_comparison_split)
         self.view.save_button.clicked.connect(self.save_image)
         self.view.mode_button.clicked.connect(self.toggle_mode)
 
@@ -122,10 +121,8 @@ class Controller:
                 self.model.attenuation_factor
             )
 
-            # Afficher l'image traitée par défaut
-            self.showing_original = False
-            self.view.update_image(self.processed_image)
-            self.view.toggle_button.setText("Afficher image originale")
+            # Afficher les deux images pour comparaison
+            self.view.set_comparison_images(self.original_image, self.processed_image)
             
             # Activer le bouton de sauvegarde
             self.view.save_button.setEnabled(True)
@@ -133,20 +130,8 @@ class Controller:
         except Exception as e:
             QMessageBox.critical(self.view, "Erreur", f"Erreur lors du traitement de l'image : {str(e)}")
 
-    def toggle_image(self):
-        if self.original_image is None or self.processed_image is None:
-            return
-
-        if self.showing_original:
-            # Afficher l'image traitée
-            self.view.update_image(self.processed_image)
-            self.view.toggle_button.setText("Afficher image originale")
-            self.showing_original = False
-        else:
-            # Afficher l'image originale
-            self.view.update_image(self.original_image)
-            self.view.toggle_button.setText("Afficher image traitée")
-            self.showing_original = True
+    def update_comparison_split(self, value):
+        self.view.image_widget.set_split_position(value)
 
     def toggle_mode(self):
         """Bascule entre le mode érosion classique et multitaille"""
