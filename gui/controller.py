@@ -1,4 +1,5 @@
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
+import cv2 as cv
 import numpy as np
 class Controller:
     def __init__(self, model, view):
@@ -17,6 +18,7 @@ class Controller:
         self.view.mask_dilate_slider.valueChanged.connect(self.update_mask_dilate)
         self.view.attenuation_slider.valueChanged.connect(self.update_attenuation)
         self.view.toggle_button.clicked.connect(self.toggle_image)
+        self.view.save_button.clicked.connect(self.save_image)
 
 
     def load_fits(self):
@@ -89,6 +91,9 @@ class Controller:
             self.showing_original = False
             self.view.update_image(self.processed_image)
             self.view.toggle_button.setText("Afficher image originale")
+            
+            # Activer le bouton de sauvegarde
+            self.view.save_button.setEnabled(True)
 
         except Exception as e:
             QMessageBox.critical(self.view, "Erreur", f"Erreur lors du traitement de l'image : {str(e)}")
@@ -107,3 +112,42 @@ class Controller:
             self.view.update_image(self.original_image)
             self.view.toggle_button.setText("Afficher image traitée")
             self.showing_original = True
+
+    def save_image(self):
+        if self.processed_image is None:
+            QMessageBox.warning(self.view, "Attention", "Aucune image à sauvegarder.")
+            return
+        
+        options = QFileDialog.Options()
+        file_path, selected_filter = QFileDialog.getSaveFileName(
+            self.view, 
+            "Enregistrer l'image", 
+            "image_traitee.png", 
+            "PNG Files (*.png);;JPEG Files (*.jpg);;TIFF Files (*.tiff)", 
+            options=options
+        )
+        
+        if file_path:
+            try:
+                # Ajouter l'extension si elle est manquante
+                import os
+                if not any(file_path.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.tiff', '.tif']):
+                    if 'PNG' in selected_filter:
+                        file_path += '.png'
+                    elif 'JPEG' in selected_filter:
+                        file_path += '.jpg'
+                    elif 'TIFF' in selected_filter:
+                        file_path += '.tiff'
+                    else:
+                        file_path += '.png'  # Par défaut
+                
+                # OpenCV uses BGR format, so convert if it's a color image
+                if self.processed_image.ndim == 3:
+                    image_to_save = cv.cvtColor(self.processed_image, cv.COLOR_RGB2BGR)
+                else:
+                    image_to_save = self.processed_image
+                
+                cv.imwrite(file_path, image_to_save)
+                QMessageBox.information(self.view, "Succès", f"Image sauvegardée avec succès :\n{file_path}")
+            except Exception as e:
+                QMessageBox.critical(self.view, "Erreur", f"Erreur lors de la sauvegarde de l'image : {str(e)}")
