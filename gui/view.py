@@ -30,6 +30,10 @@ class View(QWidget):
             QPushButton:hover {
                 background-color: #50565c;
             }
+            QPushButton:disabled {
+                background-color: #2a2a2a;
+                color: #666666;
+            }
             QSlider::groove:horizontal {
                 height: 6px;
                 background: #444;
@@ -53,15 +57,23 @@ class View(QWidget):
 
         main_layout = QVBoxLayout()
 
-        #  BOUTON CHARGER FITS 
-        self.load_button = QPushButton(' Charger un fichier FITS')
+        #  BOUTONS EN HAUT 
+        buttons_layout = QHBoxLayout()
+        
+        self.load_button = QPushButton('Charger un fichier FITS')
         self.load_button.setFixedHeight(40)
-        main_layout.addWidget(self.load_button)
+        buttons_layout.addWidget(self.load_button)
 
-        #  BOUTON TOGGLE AVANT/APRÈS 
         self.toggle_button = QPushButton("Afficher image originale")
         self.toggle_button.setFixedHeight(40)
-        main_layout.addWidget(self.toggle_button)
+        buttons_layout.addWidget(self.toggle_button)
+
+        self.save_button = QPushButton('Télécharger l\'image')
+        self.save_button.setFixedHeight(40)
+        self.save_button.setEnabled(False)  # Désactivé par défaut
+        buttons_layout.addWidget(self.save_button)
+        
+        main_layout.addLayout(buttons_layout)
 
         #  GROUPE DES SLIDERS 
         sliders_group = QGroupBox("Paramètres du traitement")
@@ -116,7 +128,7 @@ class View(QWidget):
         sliders_group.setLayout(sliders_layout)
         main_layout.addWidget(sliders_group)
 
-        #  AFFICHAGE DE L’IMAGE 
+        #  AFFICHAGE DE L'IMAGE 
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setStyleSheet("background-color: #111; border: 1px solid #333;")
@@ -125,7 +137,7 @@ class View(QWidget):
 
         self.setLayout(main_layout)
 
-    #  MISE À JOUR DE L’IMAGE 
+    #  MISE À JOUR DE L'IMAGE 
     def update_image(self, image):
         image = np.ascontiguousarray(image)
 
