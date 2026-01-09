@@ -41,18 +41,28 @@ class ImageComparisonWidget(QWidget):
         if self.processed_pixmap and self.original_pixmap:
             rect = self.rect()
             
-            # Scale both pixmaps to fill the widget
-            scaled_processed = self.processed_pixmap.scaled(rect.size(), Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
-            scaled_original = self.original_pixmap.scaled(rect.size(), Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+            # Scale both pixmaps to fit the widget while maintaining aspect ratio
+            scaled_processed = self.processed_pixmap.scaled(rect.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            scaled_original = self.original_pixmap.scaled(rect.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            
+            # Get the actual size of the scaled images
+            processed_size = scaled_processed.size()
+            original_size = scaled_original.size()
+            
+            # Calculate positions to center the images
+            processed_x = (rect.width() - processed_size.width()) // 2
+            processed_y = (rect.height() - processed_size.height()) // 2
+            original_x = (rect.width() - original_size.width()) // 2
+            original_y = (rect.height() - original_size.height()) // 2
             
             # Calculate split position
             split_x = int(self.split_position * rect.width())
             
             # Draw processed image on the left
-            painter.drawPixmap(0, 0, scaled_processed, 0, 0, split_x, rect.height())
+            painter.drawPixmap(processed_x, processed_y, scaled_processed, 0, 0, split_x - processed_x, processed_size.height())
             
             # Draw original image on the right
-            painter.drawPixmap(split_x, 0, scaled_original, split_x, 0, rect.width() - split_x, rect.height())
+            painter.drawPixmap(split_x, original_y, scaled_original, split_x - original_x, 0, rect.width() - split_x, original_size.height())
             
             # Draw split line
             painter.setPen(QPen(Qt.white, 2))
