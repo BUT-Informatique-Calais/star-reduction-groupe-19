@@ -68,8 +68,16 @@ class Model:
         # Stats pour le seuillage (comme dans ton code actuel)
         mean, median, std = sigma_clipped_stats(data_gray, sigma=3.0)
         
-        # Utilisation de DAOStarFinder (ta méthode actuelle)
-        daofind = DAOStarFinder(fwhm=3.0, threshold=5.*std)
+        # Utilisation de DAOStarFinder (paramètres ajustés pour détecter plus d'étoiles)
+        # Paramètres moins stricts pour les images PNG avec étoiles simulées
+        daofind = DAOStarFinder(
+            fwhm=2.0,           # FWHM plus petit pour les petites étoiles
+            threshold=2.0*std,  # Seuil moins strict (2*std au lieu de 5*std)
+            sharplo=0.2,        # Limites de sharpness moins strictes
+            sharphi=2.0,
+            roundlo=-1.0,       # Limites de rondeur plus larges
+            roundhi=1.0
+        )
         sources = daofind(data_gray - median)
         
         # Création du masque vide
