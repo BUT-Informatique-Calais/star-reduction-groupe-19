@@ -139,6 +139,9 @@ class View(QWidget):
             }
         """)
         buttons_layout.addWidget(self.mode_button)
+        self.ai_button = QPushButton("IA: Désactivée")
+        self.ai_button.setStyleSheet("background-color: #444; color: white; padding: 10px; border-radius: 6px;")
+        buttons_layout.addWidget(self.ai_button)
 
         self.save_button = QPushButton('Télécharger l\'image')
         self.save_button.setFixedHeight(40)

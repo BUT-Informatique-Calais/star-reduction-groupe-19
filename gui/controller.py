@@ -19,7 +19,24 @@ class Controller:
         self.view.comparison_slider.valueChanged.connect(self.update_comparison_split)
         self.view.save_button.clicked.connect(self.save_image)
         self.view.mode_button.clicked.connect(self.toggle_mode)
+        self.view.ai_button.clicked.connect(self.toggle_ai)
 
+    def toggle_ai(self):    
+        if not self.model.ai_loaded:
+            QMessageBox.warning(self.view, "Erreur", "Le fichier star_unet.pth est introuvable.")
+            return
+
+        self.model.use_ai = not self.model.use_ai
+        
+        if self.model.use_ai:
+            self.view.ai_button.setText("IA: Activée")
+            self.view.ai_button.setStyleSheet("background-color: #2a2a5a; color: white; padding: 10px; border-radius: 6px;")
+        else:
+            self.view.ai_button.setText("IA: Désactivée")
+            self.view.ai_button.setStyleSheet("background-color: #444; color: white; padding: 10px; border-radius: 6px;")
+        
+        if self.data is not None:
+            self.process_and_display()
 
     def load_fits(self):
         options = QFileDialog.Options()
